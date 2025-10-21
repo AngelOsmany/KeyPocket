@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+node_modules/
+keypocket-61ec3-firebase-adminsdk-fbsvc-5f2e62382d.json
+.env
