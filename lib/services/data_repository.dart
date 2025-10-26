@@ -13,70 +13,72 @@ class DataRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   Database? _database;
 
-  // Inicializar SQLite solo cuando sea necesario
-  Future<void> _initDatabaseIfNeeded() async {
-    if (_database != null) return;
-    
-    if (!kIsWeb) {
-      try {
-        _database = await openDatabase(
-          'keypocket.db',
-          version: 1,
-          onCreate: (Database db, int version) async {
-            await db.execute('''
-              CREATE TABLE categories(
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                createdAt INTEGER,
-                synced INTEGER DEFAULT 0
-              )
-            ''');
-            await db.execute('''
-              CREATE TABLE credentials(
-                id TEXT PRIMARY KEY,
-                categoryId TEXT,
-                username TEXT,
-                password TEXT,
-                synced INTEGER DEFAULT 0
-              )
-            ''');
-            print('✅ Base de datos SQLite creada');
-          },
-        );
-      } catch (e) {
-        print('❌ Error creando SQLite: $e');
-      }
-    }
-  }
-
+  // Obtener el ID del usuario actual
   String? get currentUserId => _auth.currentUser?.uid;
 
-  // Determinar automáticamente si usar Firebase o SQLite
-  bool get _shouldUseFirebase {
-    if (kIsWeb) {
-      // En web, siempre intentar usar Firebase primero
-      return true;
+  // Verificar si hay usuario autenticado
+  bool get isUserAuthenticated => _auth.currentUser != null;
+
+  // Inicializar SQLite solo cuando sea necesario
+  Future<void> _initDatabaseIfNeeded() async {
+    if (_database != null || kIsWeb) return;
+    
+    try {
+      _database = await openDatabase(
+        'keypocket.db',
+        version: 1,
+        onCreate: (Database db, int version) async {
+          await db.execute('''
+            CREATE TABLE categories(
+              id TEXT PRIMARY KEY,
+              userId TEXT,
+              name TEXT,
+              createdAt INTEGER,
+              synced INTEGER DEFAULT 0
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE credentials(
+              id TEXT PRIMARY KEY,
+              userId TEXT,
+              categoryId TEXT,
+              username TEXT,
+              password TEXT,
+              synced INTEGER DEFAULT 0
+            )
+          ''');
+          print('✅ Base de datos SQLite creada con relaciones de usuario');
+        },
+      );
+    } catch (e) {
+      print('❌ Error creando SQLite: $e');
     }
+  }
+
+  bool get _shouldUseFirebase {
+    if (kIsWeb) return true;
     return ConnectivityManager.isOnline;
   }
+
+  // --- OPERACIONES PARA CATEGORÍAS ---
 
   Future<void> saveCategory(String name) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Usuario no autenticado');
 
     if (_shouldUseFirebase) {
-      // Intentar con Firebase
       try {
         final docRef = await _firestore
             .collection('users')
-            .doc(userId)
+            .doc(userId) // 🔥 RELACIÓN CON USUARIO
             .collection('categories')
             .add({
           'name': name,
           'createdAt': Timestamp.now(),
+          'userId': userId, // 🔥 GUARDAR USER ID EN EL DOCUMENTO
         });
         
-        print('✅ Categoría guardada en Firebase: ${docRef.id}');
+        print('✅ Categoría guardada en Firebase para usuario: $userId');
         
         // También guardar en SQLite como backup
         if (!kIsWeb) {
@@ -85,6 +87,7 @@ class DataRepository {
             'categories',
             {
               'id': docRef.id,
+              'userId': userId, // 🔥 RELACIÓN EN SQLITE
               'name': name,
               'createdAt': DateTime.now().millisecondsSinceEpoch,
               'synced': 1,
@@ -95,7 +98,6 @@ class DataRepository {
         return;
       } catch (e) {
         print('❌ Error con Firebase, guardando localmente: $e');
-        // Continuar con guardado local
       }
     }
 
@@ -107,12 +109,13 @@ class DataRepository {
         'categories',
         {
           'id': localId,
+          'userId': userId, // 🔥 RELACIÓN EN SQLITE
           'name': name,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
           'synced': 0,
         },
       );
-      print('✅ Categoría guardada localmente: $localId');
+      print('✅ Categoría guardada localmente para usuario: $userId');
     } else {
       throw Exception('No se pudo guardar. Sin conexión y SQLite no disponible en web.');
     }
@@ -123,10 +126,10 @@ class DataRepository {
     if (userId == null) return const Stream.empty();
 
     if (_shouldUseFirebase) {
-      // Stream desde Firebase con fallback a SQLite si hay error
+      // Stream desde Firebase - SOLO categorías del usuario actual
       return _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userId) // 🔥 SOLO categorías de ESTE usuario
           .collection('categories')
           .orderBy('name')
           .snapshots()
@@ -139,6 +142,7 @@ class DataRepository {
                   'categories',
                   {
                     'id': doc.id,
+                    'userId': userId,
                     'name': doc['name'],
                     'createdAt': (doc['createdAt'] as Timestamp).millisecondsSinceEpoch,
                     'synced': 1,
@@ -155,10 +159,15 @@ class DataRepository {
           })
           .handleError((error) async {
             print('❌ Error con Firebase stream, usando datos locales: $error');
-            // Fallback a SQLite
+            // Fallback a SQLite - SOLO categorías del usuario
             if (!kIsWeb) {
               await _initDatabaseIfNeeded();
-              final categories = await _database!.query('categories');
+              final categories = await _database!.query(
+                'categories',
+                where: 'userId = ?', // 🔥 FILTRAR POR USUARIO
+                whereArgs: [userId],
+                orderBy: 'name',
+              );
               return categories.map((map) => ({
                 'id': map['id'] as String,
                 'name': map['name'] as String,
@@ -168,14 +177,17 @@ class DataRepository {
             return [];
           });
     } else {
-      // Stream desde SQLite (modo offline)
-      if (kIsWeb) {
-        return Stream.value([]); // En web sin conexión, no hay datos
-      }
+      // Stream desde SQLite - SOLO categorías del usuario actual
+      if (kIsWeb) return Stream.value([]);
       
       return Stream.periodic(const Duration(seconds: 2)).asyncMap((_) async {
         await _initDatabaseIfNeeded();
-        final categories = await _database!.query('categories', orderBy: 'name');
+        final categories = await _database!.query(
+          'categories',
+          where: 'userId = ?', // 🔥 FILTRAR POR USUARIO
+          whereArgs: [userId],
+          orderBy: 'name',
+        );
         return categories.map((map) => ({
           'id': map['id'] as String,
           'name': map['name'] as String,
@@ -185,6 +197,8 @@ class DataRepository {
     }
   }
 
+  // --- OPERACIONES PARA CREDENCIALES ---
+
   Future<void> saveCredential(String categoryId, String username, String password) async {
     final userId = currentUserId;
     if (userId == null) throw Exception('Usuario no autenticado');
@@ -193,16 +207,17 @@ class DataRepository {
       try {
         final docRef = await _firestore
             .collection('users')
-            .doc(userId)
+            .doc(userId) // 🔥 RELACIÓN CON USUARIO
             .collection('categories')
             .doc(categoryId)
             .collection('credentials')
             .add({
           'username': username,
           'password': password,
+          'userId': userId, // 🔥 GUARDAR USER ID
         });
         
-        print('✅ Credencial guardada en Firebase');
+        print('✅ Credencial guardada en Firebase para usuario: $userId');
         
         if (!kIsWeb) {
           await _initDatabaseIfNeeded();
@@ -210,6 +225,7 @@ class DataRepository {
             'credentials',
             {
               'id': docRef.id,
+              'userId': userId, // 🔥 RELACIÓN EN SQLITE
               'categoryId': categoryId,
               'username': username,
               'password': password,
@@ -231,13 +247,14 @@ class DataRepository {
         'credentials',
         {
           'id': localId,
+          'userId': userId, // 🔥 RELACIÓN EN SQLITE
           'categoryId': categoryId,
           'username': username,
           'password': password,
           'synced': 0,
         },
       );
-      print('✅ Credencial guardada localmente');
+      print('✅ Credencial guardada localmente para usuario: $userId');
     } else {
       throw Exception('No se pudo guardar. Sin conexión.');
     }
@@ -250,7 +267,7 @@ class DataRepository {
     if (_shouldUseFirebase) {
       return _firestore
           .collection('users')
-          .doc(userId)
+          .doc(userId) // 🔥 SOLO credenciales de ESTE usuario
           .collection('categories')
           .doc(categoryId)
           .collection('credentials')
@@ -263,6 +280,7 @@ class DataRepository {
                   'credentials',
                   {
                     'id': doc.id,
+                    'userId': userId,
                     'categoryId': categoryId,
                     'username': doc['username'],
                     'password': doc['password'],
@@ -285,8 +303,8 @@ class DataRepository {
               await _initDatabaseIfNeeded();
               final credentials = await _database!.query(
                 'credentials',
-                where: 'categoryId = ?',
-                whereArgs: [categoryId],
+                where: 'userId = ? AND categoryId = ?', // 🔥 FILTRAR POR USUARIO Y CATEGORÍA
+                whereArgs: [userId, categoryId],
               );
               return credentials.map((map) => ({
                 'id': map['id'] as String,
@@ -304,8 +322,8 @@ class DataRepository {
         await _initDatabaseIfNeeded();
         final credentials = await _database!.query(
           'credentials',
-          where: 'categoryId = ?',
-          whereArgs: [categoryId],
+          where: 'userId = ? AND categoryId = ?', // 🔥 FILTRAR POR USUARIO Y CATEGORÍA
+          whereArgs: [userId, categoryId],
         );
         return credentials.map((map) => ({
           'id': map['id'] as String,
@@ -324,11 +342,11 @@ class DataRepository {
     final userId = currentUserId;
     if (userId == null) return;
 
-    // Sincronizar categorías pendientes
+    // Sincronizar categorías pendientes del usuario actual
     final pendingCategories = await _database!.query(
       'categories',
-      where: 'synced = ?',
-      whereArgs: [0],
+      where: 'synced = ? AND userId = ?', // 🔥 SOLO del usuario actual
+      whereArgs: [0, userId],
     );
 
     for (final category in pendingCategories) {
@@ -340,13 +358,14 @@ class DataRepository {
             .add({
           'name': category['name'] as String,
           'createdAt': Timestamp.now(),
+          'userId': userId,
         });
 
         await _database!.update(
           'categories',
           {'id': docRef.id, 'synced': 1},
-          where: 'id = ?',
-          whereArgs: [category['id']],
+          where: 'id = ? AND userId = ?',
+          whereArgs: [category['id'], userId],
         );
         print('✅ Categoría sincronizada: ${category['name']}');
       } catch (e) {
@@ -354,11 +373,11 @@ class DataRepository {
       }
     }
 
-    // Sincronizar credenciales pendientes
+    // Sincronizar credenciales pendientes del usuario actual
     final pendingCredentials = await _database!.query(
       'credentials',
-      where: 'synced = ?',
-      whereArgs: [0],
+      where: 'synced = ? AND userId = ?', // 🔥 SOLO del usuario actual
+      whereArgs: [0, userId],
     );
 
     for (final credential in pendingCredentials) {
@@ -372,18 +391,44 @@ class DataRepository {
             .add({
           'username': credential['username'] as String,
           'password': credential['password'] as String,
+          'userId': userId,
         });
 
         await _database!.update(
           'credentials',
           {'synced': 1},
-          where: 'id = ?',
-          whereArgs: [credential['id']],
+          where: 'id = ? AND userId = ?',
+          whereArgs: [credential['id'], userId],
         );
-        print('✅ Credencial sincronizada');
+        print('✅ Credencial sincronizada para usuario: $userId');
       } catch (e) {
         print('❌ Error sincronizando credencial: $e');
       }
+    }
+  }
+
+  // Limpiar datos locales cuando el usuario cierre sesión
+  Future<void> clearLocalData() async {
+    if (kIsWeb || _database == null) return;
+
+    final userId = currentUserId;
+    if (userId == null) return;
+
+    try {
+      // Eliminar solo los datos del usuario actual
+      await _database!.delete(
+        'categories',
+        where: 'userId = ?',
+        whereArgs: [userId],
+      );
+      await _database!.delete(
+        'credentials', 
+        where: 'userId = ?',
+        whereArgs: [userId],
+      );
+      print('✅ Datos locales eliminados para usuario: $userId');
+    } catch (e) {
+      print('❌ Error eliminando datos locales: $e');
     }
   }
 }

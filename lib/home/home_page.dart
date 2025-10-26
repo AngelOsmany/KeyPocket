@@ -51,7 +51,11 @@ class _HomePageState extends State<HomePage> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => _auth.signOut(),
+            onPressed: () async {
+          // Limpiar datos locales antes de cerrar sesión
+          await DataRepository().clearLocalData();
+          await _auth.signOut();
+        },
           ),
         ],
       ),
