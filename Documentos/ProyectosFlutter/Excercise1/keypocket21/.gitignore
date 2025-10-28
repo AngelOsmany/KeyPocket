@@ -43,3 +43,18 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node.js Backend
+backend/node_modules/
+backend/.env
+backend/config/serviceAccountKey.json
+backend/npm-debug.log
+backend/yarn-debug.log*
+backend/yarn-error.log*
+backend/.pnpm-debug.log*
+backend/logs
+backend/*.log
+backend/.env.local
+backend/.env.development.local
+backend/.env.test.local
+backend/.env.production.local
