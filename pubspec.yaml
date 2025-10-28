@@ -41,6 +41,7 @@ dependencies:
   firebase_core:        # <--- Sin número
   firebase_auth:       # <--- Sin número
   cloud_firestore:     # <--- Sin número
+  local_auth: ^3.0.0
   # ... otros paquetes
 
 dev_dependencies:
