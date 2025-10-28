@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/data_repository.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,14 +14,34 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _auth = FirebaseAuth.instance;
+  
+  // 🔹 Guardar/obtener usuario actual en SharedPreferences
+  Future<void> _saveCurrentUser(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userId', userId);
+  }
+
+  Future<void> _clearCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('userId');
+  }
+
+final _auth = FirebaseAuth.instance;
 
   Future<void> _signIn() async {
     try {
-      await _auth.signInWithEmailAndPassword(
+      final userCredential = await _auth.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      // 🔹 Guardar UID en SharedPreferences para soporte offline y actualizar cache local del repositorio
+      if (userCredential.user != null) {
+        await _saveCurrentUser(userCredential.user!.uid);
+        try {
+          DataRepository().setCachedUserId(userCredential.user!.uid);
+        } catch (_) {}
+      }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Error al iniciar sesión")));

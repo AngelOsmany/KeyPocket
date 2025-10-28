@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'connectivity_manager.dart';
 
@@ -12,9 +13,24 @@ class DataRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   Database? _database;
+  static String? _cachedUserId;
+
+  // Permitir establecer cache del userId (llamar desde login/logout)
+  void setCachedUserId(String? id) {
+    _cachedUserId = id;
+  }
+
+  // Cargar userId cache desde SharedPreferences
+  Future<void> _loadCachedUserId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _cachedUserId = prefs.getString('userId');
+    } catch (_) {}
+  }
 
   // Obtener el ID del usuario actual
-  String? get currentUserId => _auth.currentUser?.uid;
+
+  String? get currentUserId => _auth.currentUser?.uid ?? _cachedUserId;
 
   // Verificar si hay usuario autenticado
   bool get isUserAuthenticated => _auth.currentUser != null;
@@ -22,6 +38,8 @@ class DataRepository {
   // Inicializar SQLite solo cuando sea necesario
   Future<void> _initDatabaseIfNeeded() async {
     if (_database != null || kIsWeb) return;
+    // Cargar userId cache para poder usarlo aún sin conexión
+    await _loadCachedUserId();
     
     try {
       _database = await openDatabase(

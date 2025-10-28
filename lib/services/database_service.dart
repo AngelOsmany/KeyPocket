@@ -32,6 +32,7 @@ class DatabaseService {
       CREATE TABLE IF NOT EXISTS categories(
         id TEXT PRIMARY KEY,
         name TEXT,
+        userId TEXT,
         createdAt INTEGER,
         synced INTEGER DEFAULT 0
       )
@@ -43,10 +44,37 @@ class DatabaseService {
         categoryId TEXT,
         username TEXT,
         password TEXT,
+        userId TEXT,
         synced INTEGER DEFAULT 0,
         FOREIGN KEY (categoryId) REFERENCES categories (id) ON DELETE CASCADE
       )
     ''');
+  }
+
+
+  // 🔹 Verificar y crear columna userId en tablas existentes (migración en caliente)
+  static Future<void> _ensureUserIdColumnExists(Database db) async {
+    // categories
+    final catInfo = await db.rawQuery("PRAGMA table_info('categories')");
+    final catHasUserId = catInfo.any((row) => row['name'] == 'userId');
+    if (!catHasUserId) {
+      try {
+        await db.execute("ALTER TABLE categories ADD COLUMN userId TEXT");
+      } catch (e) {
+        print('⚠️ No se pudo agregar columna userId a categories: $e');
+      }
+    }
+
+    // credentials
+    final credInfo = await db.rawQuery("PRAGMA table_info('credentials')");
+    final credHasUserId = credInfo.any((row) => row['name'] == 'userId');
+    if (!credHasUserId) {
+      try {
+        await db.execute("ALTER TABLE credentials ADD COLUMN userId TEXT");
+      } catch (e) {
+        print('⚠️ No se pudo agregar columna userId a credentials: $e');
+      }
+    }
   }
 
   static Future<void> close() async {
