@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/credential.dart';
 import '../../services/sync_service.dart';
+import '../../services/biometric_service.dart';
 
 class CredentialsScreen extends StatefulWidget {
   final String userId;
@@ -23,6 +24,8 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
   List<Credential> _credentials = [];
   bool _obscurePassword = true;
   bool _isLoading = true;
+  bool _isAuthenticated = false;
+  final BiometricService _biometricService = BiometricService();
 
   @override
   void initState() {
@@ -190,7 +193,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                                 Text('Usuario: ${credential.username}'),
                                 Text('Email: ${credential.email}'),
                                 Text(
-                                  'Contraseña: ${_obscurePassword ? '••••••••' : credential.password}',
+                                  'Contraseña: ${_obscurePassword || !_isAuthenticated ? '••••••••' : credential.password}',
                                 ),
                                 if (credential.website != null) 
                                   Text('Sitio: ${credential.website}'),
@@ -206,8 +209,44 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                                     _obscurePassword ? Icons.visibility : Icons.visibility_off,
                                     color: Colors.blue,
                                   ),
-                                  onPressed: () {
-                                    setState(() => _obscurePassword = !_obscurePassword);
+                                  onPressed: () async {
+                                    if (_obscurePassword) {
+                                      // Si está oculta, intentar autenticación biométrica
+                                      print('👆 Usuario presionó el botón para ver contraseñas');
+                                      
+                                      final authenticated = await _biometricService.authenticate(
+                                        localizedReason: 'Autentícate para ver tus contraseñas',
+                                      );
+                                      
+                                      print('🔐 Resultado de autenticación: $authenticated');
+                                      
+                                      if (authenticated) {
+                                        setState(() {
+                                          _isAuthenticated = true;
+                                          _obscurePassword = false;
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Autenticación exitosa'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Autenticación fallida. Verifica la consola de debug para más detalles.'),
+                                            backgroundColor: Colors.red,
+                                            duration: Duration(seconds: 3),
+                                          ),
+                                        );
+                                      }
+                                    } else {
+                                      // Si ya está visible, simplemente ocultarla
+                                      setState(() {
+                                        _obscurePassword = true;
+                                        _isAuthenticated = false;
+                                      });
+                                    }
                                   },
                                 ),
                                 IconButton(

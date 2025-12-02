@@ -26,15 +26,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Future<void> _loadCategories() async {
     try {
+      if (!mounted) return;
       setState(() => _isLoading = true);
       final syncService = Provider.of<SyncService>(context, listen: false);
       final categories = await syncService.getCategories(widget.userId);
+      if (!mounted) return;
       setState(() {
         _categories = categories;
         _isLoading = false;
       });
     } catch (e) {
       print('Error cargando categorías: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }

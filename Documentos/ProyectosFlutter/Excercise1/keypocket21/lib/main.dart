@@ -14,16 +14,20 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Inicializa Firebase
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyBPvVfoRiHEXMQZ2YAGDzunDNgA_0no01w",
-      authDomain: "keypocket-61ec3.firebaseapp.com",
-      projectId: "keypocket-61ec3",
-      storageBucket: "keypocket-61ec3.firebasestorage.app",
-      messagingSenderId: "603483098467",
-      appId: "1:603483098467:web:c7c0a65fcb84753c621756",
-    ),
-  );
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: "AIzaSyBPvVfoRiHEXMQZ2YAGDzunDNgA_0no01w",
+        authDomain: "keypocket-61ec3.firebaseapp.com",
+        projectId: "keypocket-61ec3",
+        storageBucket: "keypocket-61ec3.firebasestorage.app",
+        messagingSenderId: "603483098467",
+        appId: "1:603483098467:web:c7c0a65fcb84753c621756",
+      ),
+    );
+  } catch (e) {
+    print('Error initializing Firebase: $e');
+  }
   
   // Inicializa Hive
   await Hive.initFlutter();
