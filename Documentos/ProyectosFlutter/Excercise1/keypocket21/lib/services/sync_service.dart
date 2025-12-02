@@ -74,8 +74,13 @@ class SyncService {
     if (await isConnected) {
       try {
         final cloudCategories = await _firestore.getCategories(userId);
-        
-        // Si hay diferencias, actualizar local
+        // Si la nube está vacía pero local tiene datos, mantener locales
+        if (cloudCategories.isEmpty && localCategories.isNotEmpty) {
+          print('☁️ Nube vacía, usando categorías locales (${localCategories.length})');
+          return localCategories;
+        }
+
+        // Si hay diferencias (por cantidad), actualizar local con nube
         if (cloudCategories.length != localCategories.length) {
           print('🔄 Sincronizando categorías desde la nube...');
           for (final category in cloudCategories) {

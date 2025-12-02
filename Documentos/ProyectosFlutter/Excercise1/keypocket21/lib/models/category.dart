@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Category {
   final String id;
   final String name;
@@ -11,7 +13,18 @@ class Category {
     required this.createdAt,
   });
 
-  Map<String, dynamic> toMap() {
+  // Mapa para Firestore (usa Timestamp para createdAt)
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'id': id,
+      'name': name,
+      'userId': userId,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
+  }
+
+  // Mapa para almacenamiento local (Hive) usando tipos primitivos
+  Map<String, dynamic> toLocalMap() {
     return {
       'id': id,
       'name': name,
@@ -21,13 +34,25 @@ class Category {
   }
 
   factory Category.fromMap(Map<dynamic, dynamic> map) {
+    DateTime created;
+    final raw = map['createdAt'];
+    if (raw is Timestamp) {
+      created = raw.toDate();
+    } else if (raw is int) {
+      created = DateTime.fromMillisecondsSinceEpoch(raw);
+    } else if (raw is String) {
+      created = DateTime.fromMillisecondsSinceEpoch(int.tryParse(raw) ?? 0);
+    } else if (raw is DateTime) {
+      created = raw;
+    } else {
+      created = DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
     return Category(
       id: map['id']?.toString() ?? '',
       name: map['name']?.toString() ?? '',
       userId: map['userId']?.toString() ?? '',
-      createdAt: DateTime.fromMillisecondsSinceEpoch(
-        (map['createdAt'] is int) ? map['createdAt'] as int : int.parse(map['createdAt'].toString()),
-      ),
+      createdAt: created,
     );
   }
 

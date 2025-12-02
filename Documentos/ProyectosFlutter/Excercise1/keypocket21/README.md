@@ -116,25 +116,6 @@ keypocket21/
 - Check API base URL configuration
 - Ensure backend server is running
 
-## Contributing
-
-1. Create a new branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes and commit:
-   ```bash
-   git commit -m "Description of changes"
-   ```
-
-3. Push to your branch:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-4. Create a Pull Request
-
 ## Resources
 
 - [Flutter Documentation](https://docs.flutter.dev/)

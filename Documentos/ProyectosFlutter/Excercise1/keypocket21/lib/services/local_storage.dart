@@ -93,7 +93,7 @@ class LocalStorage {
   // ========== HELPERS ==========
 
   static List<Map<String, dynamic>> _serializeCategories(List<Category> categories) {
-    return categories.map((category) => category.toMap()).toList();
+    return categories.map((category) => category.toLocalMap()).toList();
   }
 
   static List<Category> _deserializeCategories(dynamic data) {
@@ -114,7 +114,7 @@ class LocalStorage {
   }
 
   static List<Map<String, dynamic>> _serializeCredentials(List<Credential> credentials) {
-    return credentials.map((credential) => credential.toMap()).toList();
+    return credentials.map((credential) => credential.toLocalMap()).toList();
   }
 
   static List<Credential> _deserializeCredentials(dynamic data) {

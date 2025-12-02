@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Credential {
   final String id;
   final String title;
@@ -23,7 +25,24 @@ class Credential {
     required this.createdAt,
   });
 
-  Map<String, dynamic> toMap() {
+  // Mapa para Firestore (usa Timestamp)
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'id': id,
+      'title': title,
+      'username': username,
+      'email': email,
+      'password': password,
+      'website': website,
+      'notes': notes,
+      'categoryId': categoryId,
+      'userId': userId,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
+  }
+
+  // Mapa para almacenamiento local (Hive) usando tipos primitivos
+  Map<String, dynamic> toLocalMap() {
     return {
       'id': id,
       'title': title,
@@ -39,6 +58,20 @@ class Credential {
   }
 
   factory Credential.fromMap(Map<dynamic, dynamic> map) {
+    DateTime created;
+    final raw = map['createdAt'];
+    if (raw is Timestamp) {
+      created = raw.toDate();
+    } else if (raw is int) {
+      created = DateTime.fromMillisecondsSinceEpoch(raw);
+    } else if (raw is String) {
+      created = DateTime.fromMillisecondsSinceEpoch(int.tryParse(raw) ?? 0);
+    } else if (raw is DateTime) {
+      created = raw;
+    } else {
+      created = DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
     return Credential(
       id: map['id']?.toString() ?? '',
       title: map['title']?.toString() ?? '',
@@ -49,9 +82,7 @@ class Credential {
       notes: map['notes']?.toString(),
       categoryId: map['categoryId']?.toString() ?? '',
       userId: map['userId']?.toString() ?? '',
-      createdAt: DateTime.fromMillisecondsSinceEpoch(
-        (map['createdAt'] is int) ? map['createdAt'] as int : int.parse(map['createdAt'].toString()),
-      ),
+      createdAt: created,
     );
   }
 

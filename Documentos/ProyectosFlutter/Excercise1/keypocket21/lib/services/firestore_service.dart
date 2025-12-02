@@ -9,7 +9,7 @@ class FirestoreService {
 
   Future<void> saveCategory(Category category) async {
     try {
-      final categoryData = category.toMap();
+      final categoryData = category.toFirestoreMap();
       print('☁️ Enviando categoría a Firestore: ${category.name}');
       
       await _firestore
@@ -80,7 +80,7 @@ class FirestoreService {
 
   Future<void> saveCredential(Credential credential) async {
     try {
-      final credentialData = credential.toMap();
+      final credentialData = credential.toFirestoreMap();
       print('☁️ Enviando credencial a Firestore: ${credential.title}');
       print('   - userId: ${credential.userId}');
       print('   - categoryId: ${credential.categoryId}');
